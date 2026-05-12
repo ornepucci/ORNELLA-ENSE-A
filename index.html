@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ornella Enseña - Plataforma Educativa</title>
+    <meta name="description" content="Plataforma premium para docentes con IA integrada y gestión de archivos.">
+    
+    <!-- Google Fonts: Inter & Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Supabase JS Library -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- Google Gemini SDK -->
+    
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Pantalla de Login -->
+    <div id="login-screen" class="login-screen" style="display: none;">
+        <div class="login-card">
+            <div class="logo" style="justify-content: center; margin-bottom: 2rem; font-size: 2rem;">
+                <i data-lucide="graduation-cap" class="logo-icon" style="width: 40px; height: 40px;"></i>
+                <span>Ornella Enseña</span>
+            </div>
+            <h2 style="text-align: center; margin-bottom: 1rem; color: var(--text-primary);">Acceso Privado</h2>
+            <p style="text-align: center; color: var(--text-secondary); margin-bottom: 2.5rem; font-size: 0.95rem; line-height: 1.5;">Esta plataforma es de uso privado. Por favor, ingresa tu correo electrónico autorizado para continuar.</p>
+            
+            <form id="login-form" onsubmit="event.preventDefault(); handleLogin();">
+                <div class="form-group" style="margin-bottom: 1.5rem;">
+                    <label for="login-email" style="display: block; margin-bottom: 0.75rem; font-weight: 500;">Correo Electrónico</label>
+                    <input type="email" id="login-email" required placeholder="tu@correo.com" style="width: 100%; padding: 1rem; border-radius: 12px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-family: inherit; font-size: 1rem; transition: border-color 0.2s;" />
+                    <p id="login-error" style="color: #ef4444; font-size: 0.85rem; margin-top: 0.75rem; display: none; font-weight: 500;">Correo no autorizado.</p>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; padding: 1rem; font-size: 1.05rem; border-radius: 12px;">
+                    Ingresar a la plataforma
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div id="app" style="display: none;">
+        <!-- Sidebar Overlay -->
+        <div id="sidebar-overlay" class="sidebar-overlay"></div>
+        
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo" id="sidebar-logo" style="cursor: pointer;">
+                    <i data-lucide="graduation-cap" class="logo-icon"></i>
+                    <span>Ornella Enseña</span>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <!-- Dashboard link moved to logo and avatar -->
+                
+                <div class="sidebar-divider">PROFESORES</div>
+                
+                <div id="professors-list" class="professors-list">
+                    <!-- Dynamic list will be injected here -->
+                </div>
+
+                <button class="btn btn-secondary btn-full" id="btn-create-professor">
+                    <i data-lucide="plus-circle"></i>
+                    <span>Crear Profesor</span>
+                </button>
+
+                <div class="sidebar-divider">SISTEMA</div>
+                
+                <a href="#" class="nav-item" id="nav-settings">
+                    <i data-lucide="settings"></i>
+                    <span>Configuración</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <div style="font-size: 0.7rem; opacity: 0.5; padding: 1rem; text-align: center;">
+                    Ornella Enseña v1.0
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-bar">
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-label="Abrir menú">
+                        <i data-lucide="menu"></i>
+                    </button>
+                    <h1 id="page-title">Bienvenido, alumno/a</h1>
+                </div>
+                <div class="top-bar-right">
+                    <button id="theme-toggle" class="theme-toggle-compact" title="Cambiar tema">
+                        <i data-lucide="sun" class="sun-icon"></i>
+                        <i data-lucide="moon" class="moon-icon"></i>
+                    </button>
+                    <div class="user-profile" id="user-profile" style="cursor: pointer;">
+                        <div class="avatar">OE</div>
+                    </div>
+                </div>
+            </header>
+
+            <section id="content-area" class="content-area">
+                <!-- Dashboard empty as requested -->
+                <div id="dashboard-placeholder" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh; opacity: 0.3;">
+                    <i data-lucide="graduation-cap" style="width: 80px; height: 80px; margin-bottom: 1rem;"></i>
+                    <p>Selecciona un profesor para comenzar</p>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script type="module" src="app.js"></script>
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+    </script>
+</body>
+</html>
