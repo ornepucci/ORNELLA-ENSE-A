@@ -36,7 +36,11 @@
                 <div class="form-group" style="margin-bottom: 1.5rem;">
                     <label for="login-email" style="display: block; margin-bottom: 0.75rem; font-weight: 500;">Correo Electrónico</label>
                     <input type="email" id="login-email" required placeholder="tu@correo.com" style="width: 100%; padding: 1rem; border-radius: 12px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-family: inherit; font-size: 1rem; transition: border-color 0.2s;" />
-                    <p id="login-error" style="color: #ef4444; font-size: 0.85rem; margin-top: 0.75rem; display: none; font-weight: 500;">Correo no autorizado.</p>
+                </div>
+                <div class="form-group" style="margin-bottom: 1.5rem;">
+                    <label for="login-password" style="display: block; margin-bottom: 0.75rem; font-weight: 500;">Contraseña</label>
+                    <input type="password" id="login-password" required placeholder="••••••••" style="width: 100%; padding: 1rem; border-radius: 12px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-family: inherit; font-size: 1rem; transition: border-color 0.2s;" />
+                    <p id="login-error" style="color: #ef4444; font-size: 0.85rem; margin-top: 0.75rem; display: none; font-weight: 500;">Correo o contraseña incorrectos.</p>
                 </div>
                 <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; padding: 1rem; font-size: 1.05rem; border-radius: 12px;">
                     Ingresar a la plataforma
@@ -79,6 +83,10 @@
                 </a>
             </nav>
             <div class="sidebar-footer">
+                <button class="btn btn-secondary btn-full" id="btn-logout" style="margin-bottom: 1rem; color: #ef4444; border-color: rgba(239, 68, 68, 0.2); background: rgba(239, 68, 68, 0.05);">
+                    <i data-lucide="log-out"></i>
+                    <span>Cerrar Sesión</span>
+                </button>
                 <div style="font-size: 0.7rem; opacity: 0.5; padding: 1rem; text-align: center;">
                     Ornella Enseña v1.0
                 </div>
