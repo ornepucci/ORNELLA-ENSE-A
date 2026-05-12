@@ -30,7 +30,8 @@ let chatSession = null;
 
 // Initialize App
 async function init() {
-    if (localStorage.getItem('isLoggedIn') !== 'true') {
+    // Usamos sessionStorage para que la sesión expire al cerrar la pestaña o app
+    if (sessionStorage.getItem('isLoggedIn') !== 'true') {
         const loginScreen = document.getElementById('login-screen');
         const appScreen = document.getElementById('app');
         if (loginScreen) loginScreen.style.display = 'flex';
@@ -58,7 +59,7 @@ window.handleLogin = function() {
     
     // Validar correo y contraseña
     if (emailInput.toLowerCase().trim() === 'ornepucci2402@gmail.com' && passwordInput === 'Y@g00902') {
-        localStorage.setItem('isLoggedIn', 'true');
+        sessionStorage.setItem('isLoggedIn', 'true');
         if (errorMsg) errorMsg.style.display = 'none';
         
         // Limpiar campos por seguridad
@@ -184,9 +185,14 @@ function toggleMobileMenu() {
     }
 }
 
-function navigate(page, professorId = null) {
+function navigate(page, professorId = null, pushState = true) {
     state.currentPage = page;
     state.selectedProfessorId = professorId;
+    
+    // Guardar en el historial para que el botón "atrás" del celular funcione
+    if (pushState) {
+        history.pushState({ page, professorId }, '', `#${page}${professorId ? '-' + professorId : ''}`);
+    }
     
     // Close mobile menu on navigation
     closeMobileMenu();
@@ -454,12 +460,18 @@ function renderChat() {
                     <i data-lucide="send"></i>
                 </button>
             </div>
-            <div style="display: flex; justify-content: center; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap;">
+            <div style="display: flex; justify-content: center; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap;" class="chat-mode-buttons">
                 <button class="btn btn-secondary btn-sm" id="btn-quick-response" style="font-size: 0.75rem; padding: 0.4rem 1rem;">
-                    <i data-lucide="zap" style="width: 14px; margin-right: 4px;"></i> Respuesta Rápida
+                    <i data-lucide="zap" style="width: 14px; margin-right: 4px;"></i> Rápida
                 </button>
-                <button class="btn btn-primary btn-sm" id="btn-class-mode" style="font-size: 0.75rem; padding: 0.4rem 1rem; background: var(--secondary-color);">
+                <button class="btn btn-primary btn-sm" id="btn-class-mode" style="font-size: 0.75rem; padding: 0.4rem 1rem; background: var(--brand-violet);">
                     <i data-lucide="book-open" style="width: 14px; margin-right: 4px;"></i> Clase
+                </button>
+                <button class="btn btn-secondary btn-sm" id="btn-exam-mode" style="font-size: 0.75rem; padding: 0.4rem 1rem; background: #3b82f6; color: white;">
+                    <i data-lucide="pencil" style="width: 14px; margin-right: 4px;"></i> Examen
+                </button>
+                <button class="btn btn-secondary btn-sm" id="btn-summary-mode" style="font-size: 0.75rem; padding: 0.4rem 1rem; background: #10b981; color: white;">
+                    <i data-lucide="file-text" style="width: 14px; margin-right: 4px;"></i> Resumen
                 </button>
             </div>
         </div>
@@ -475,13 +487,19 @@ function renderChat() {
         const style = document.createElement('style');
         style.id = 'chat-styles';
         style.textContent = `
-            .chat-container { height: 70vh; display: flex; flex-direction: column; }
+            .chat-container { height: 75vh; display: flex; flex-direction: column; }
             .chat-messages { flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 1rem; }
             .message { padding: 0.75rem 1rem; border-radius: 12px; max-width: 80%; line-height: 1.5; }
             .assistant { background: var(--bg-primary); align-self: flex-start; color: var(--text-primary); border: 1px solid var(--border-color); white-space: pre-wrap; }
             .user { background: var(--accent-gradient); color: white; align-self: flex-end; }
             .chat-input-area { display: flex; gap: 0.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color); }
             .chat-input-area input { flex: 1; padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); }
+            .chat-mode-buttons .btn { flex: 1; min-width: 100px; justify-content: center; }
+            @media (max-width: 768px) {
+                .chat-container { height: calc(100vh - 180px); }
+                .chat-mode-buttons { gap: 0.25rem; }
+                .chat-mode-buttons .btn { min-width: 45%; font-size: 0.7rem; padding: 0.4rem; }
+            }
             .typing-indicator { display: flex; gap: 4px; padding: 1rem !important; align-items: center; }
             .typing-indicator .dot { width: 6px; height: 6px; background: var(--text-secondary); border-radius: 50%; animation: typing 1.4s infinite ease-in-out; }
             .typing-indicator .dot:nth-child(1) { animation-delay: -0.32s; }
@@ -495,6 +513,8 @@ function renderChat() {
     document.getElementById('send-chat').onclick = () => handleChatSubmit('normal');
     document.getElementById('btn-quick-response').onclick = () => handleChatSubmit('quick');
     document.getElementById('btn-class-mode').onclick = () => handleChatSubmit('class');
+    document.getElementById('btn-exam-mode').onclick = () => handleChatSubmit('exam');
+    document.getElementById('btn-summary-mode').onclick = () => handleChatSubmit('summary');
     document.getElementById('chat-input').onkeypress = (e) => {
         if (e.key === 'Enter') handleChatSubmit('normal');
     };
@@ -523,6 +543,8 @@ async function handleChatSubmit(mode = 'normal') {
     let displayMsg = text;
     if (mode === 'quick') displayMsg += " (Respuesta rápida)";
     if (mode === 'class') displayMsg += " (Modo Clase)";
+    if (mode === 'exam') displayMsg += " (Modo Examen)";
+    if (mode === 'summary') displayMsg += " (Modo Resumen)";
     
     appendMessage('user', displayMsg);
     
@@ -531,6 +553,8 @@ async function handleChatSubmit(mode = 'normal') {
     let apiText = text;
     if (mode === 'quick') apiText = `[RESPUESTA RÁPIDA]: ${text}`;
     if (mode === 'class') apiText = `[MODO CLASE - DESARROLLO PEDAGÓGICO]: ${text}`;
+    if (mode === 'exam') apiText = `[MODO EXAMEN - EVALUACIÓN]: ${text}`;
+    if (mode === 'summary') apiText = `[MODO RESUMEN - SÍNTESIS]: ${text}`;
     
     state.chatHistories[prof.id].push({ role: 'user', text: apiText });
 
@@ -565,6 +589,10 @@ async function handleChatSubmit(mode = 'normal') {
             systemInstruction += "\nREGLA ADICIONAL: Da una respuesta concisa pero completa y con contexto académico, ideal para un parcial o una pregunta de clase inmediata.";
         } else if (mode === 'class') {
             systemInstruction += "\nREGLA ADICIONAL: Actúa como un docente impartiendo una clase interactiva. Desarrolla el tema con profundidad, utiliza un tono pedagógico, fomenta el ida y vuelta con el alumno, y utiliza estructuras claras para explicar conceptos complejos.";
+        } else if (mode === 'exam') {
+            systemInstruction += "\nREGLA ADICIONAL: Actúa como un examinador. Tu objetivo es evaluar al alumno haciéndole preguntas progresivas sobre el tema. Evalúa sus respuestas y dale feedback constructivo.";
+        } else if (mode === 'summary') {
+            systemInstruction += "\nREGLA ADICIONAL: Proporciona un resumen claro, estructurado y sintético de la información solicitada o de los materiales disponibles.";
         }
 
         // Llamada segura al Cloudflare Worker (la clave de Gemini vive allá)
@@ -1035,11 +1063,20 @@ function setupEventListeners() {
     const btnLogout = document.getElementById('btn-logout');
     if (btnLogout) {
         btnLogout.addEventListener('click', () => {
-            localStorage.removeItem('isLoggedIn');
+            sessionStorage.removeItem('isLoggedIn');
             location.reload();
         });
     }
 }
+
+// Historial para el botón atrás del celular
+window.onpopstate = (event) => {
+    if (event.state) {
+        navigate(event.state.page, event.state.professorId, false);
+    } else {
+        navigate('dashboard', null, false);
+    }
+};
 
 // Run init
 window.addEventListener('DOMContentLoaded', init);
