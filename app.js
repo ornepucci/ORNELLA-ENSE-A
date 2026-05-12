@@ -1,7 +1,10 @@
 /**
  * Ornella Enseña - Application Logic
+ * Frontend seguro: Las claves de API viven en el Cloudflare Worker, NUNCA aquí.
  */
-import { GoogleGenerativeAI } from "https://esm.run/@google/generative-ai";
+
+// URL del Cloudflare Worker (desplegado)
+const WORKER_URL = 'https://ornella-ensena-worker.orneeduca.workers.dev';
 
 // State management
 const state = {
@@ -14,8 +17,8 @@ const state = {
     supabaseConfig: {
         url: 'https://pelkcvbqrpsknqjdhyrq.supabase.co',
         key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBlbGtjdmJxcnBza25xamRoeXJxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwMjIyMzEsImV4cCI6MjA5MzU5ODIzMX0.td00CNWUrN9DTWK0cb47PfzrSxNBcObEbaXwxmjjKGQ'
-    },
-    geminiKey: 'AIzaSyBrYYav5b5KSLpEmn0EVgLuwwYmayVNgWA'
+    }
+    // geminiKey eliminada - ahora vive como Secret en Cloudflare Workers
 };
 
 let supabaseClient = null;
@@ -50,11 +53,16 @@ async function init() {
 
 window.handleLogin = function() {
     const emailInput = document.getElementById('login-email').value;
+    const passwordInput = document.getElementById('login-password').value;
     const errorMsg = document.getElementById('login-error');
     
-    if (emailInput.toLowerCase().trim() === 'ornepucci2402@gmail.com') {
+    // Validar correo y contraseña
+    if (emailInput.toLowerCase().trim() === 'ornepucci2402@gmail.com' && passwordInput === 'Y@g00902') {
         localStorage.setItem('isLoggedIn', 'true');
         if (errorMsg) errorMsg.style.display = 'none';
+        
+        // Limpiar campos por seguridad
+        document.getElementById('login-password').value = '';
         init(); // Start the app
     } else {
         if (errorMsg) errorMsg.style.display = 'block';
@@ -474,6 +482,11 @@ function renderChat() {
             .user { background: var(--accent-gradient); color: white; align-self: flex-end; }
             .chat-input-area { display: flex; gap: 0.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color); }
             .chat-input-area input { flex: 1; padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); }
+            .typing-indicator { display: flex; gap: 4px; padding: 1rem !important; align-items: center; }
+            .typing-indicator .dot { width: 6px; height: 6px; background: var(--text-secondary); border-radius: 50%; animation: typing 1.4s infinite ease-in-out; }
+            .typing-indicator .dot:nth-child(1) { animation-delay: -0.32s; }
+            .typing-indicator .dot:nth-child(2) { animation-delay: -0.16s; }
+            @keyframes typing { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
         `;
         document.head.appendChild(style);
     }
@@ -521,6 +534,15 @@ async function handleChatSubmit(mode = 'normal') {
     
     state.chatHistories[prof.id].push({ role: 'user', text: apiText });
 
+    // Mostrar indicador de "escribiendo"
+    const chatMessages = document.getElementById('chat-messages');
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'message assistant typing-indicator';
+    loadingDiv.id = 'typing-indicator';
+    loadingDiv.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
+    chatMessages.appendChild(loadingDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+
     try {
         const { data: resources } = await supabaseClient
             .from('recursos_profesor')
@@ -545,19 +567,22 @@ async function handleChatSubmit(mode = 'normal') {
             systemInstruction += "\nREGLA ADICIONAL: Actúa como un docente impartiendo una clase interactiva. Desarrolla el tema con profundidad, utiliza un tono pedagógico, fomenta el ida y vuelta con el alumno, y utiliza estructuras claras para explicar conceptos complejos.";
         }
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${state.geminiKey}`, {
+        // Llamada segura al Cloudflare Worker (la clave de Gemini vive allá)
+        const response = await fetch(`${WORKER_URL}/api/chat`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ role: 'user', parts: [{ text: systemInstruction + "\n\nPregunta del alumno: " + text }] }]
-            })
+            body: JSON.stringify({ prompt: systemInstruction + '\n\nPregunta del alumno: ' + text })
         });
 
         const data = await response.json();
         
-        if (data.error) throw new Error(data.error.message);
+        if (data.error) throw new Error(data.error);
 
-        const responseText = data.candidates[0].content.parts[0].text;
+        const responseText = data.text;
+        
+        const indicator = document.getElementById('typing-indicator');
+        if (indicator) indicator.remove();
+
         appendMessage('assistant', responseText);
         state.chatHistories[prof.id].push({ role: 'assistant', text: responseText });
         updateUsageStats(text, responseText);
@@ -576,6 +601,9 @@ async function handleChatSubmit(mode = 'normal') {
             mockResponse = `*Asistente de ${prof.nombre} (Modo Respaldo)*: \n\nSobre tu consulta en ${prof.materia}: "${text}". Te recomiendo revisar los materiales cargados mientras la conexión con Google se estabiliza.`;
         }
         
+        const indicator = document.getElementById('typing-indicator');
+        if (indicator) indicator.remove();
+
         appendMessage('assistant', mockResponse);
         state.chatHistories[prof.id].push({ role: 'assistant', text: mockResponse });
         updateUsageStats(text, mockResponse);
@@ -606,14 +634,14 @@ function renderFiles() {
                 <label for="file-upload" class="btn btn-primary" style="cursor: pointer;">
                     <i data-lucide="plus"></i> Subir
                 </label>
-                <input type="file" id="file-upload" hidden multiple />
+                <input type="file" id="file-upload" style="display: none;" multiple />
             </div>
 
             <!-- Drag & Drop Zone -->
             <div id="drop-zone" class="drop-zone">
-                <i data-lucide="upload-cloud" style="width: 48px; height: 48px; opacity: 0.5;"></i>
-                <p>Arrastra tus archivos aquí o haz clic en el botón de arriba</p>
-                <span style="font-size: 0.75rem; opacity: 0.6;">Puedes subir varios archivos a la vez</span>
+                <i data-lucide="upload-cloud" style="width: 48px; height: 48px; opacity: 0.5; pointer-events: none;"></i>
+                <p style="pointer-events: none;">Arrastra tus archivos aquí o haz clic en este recuadro para subir</p>
+                <span style="font-size: 0.75rem; opacity: 0.6; pointer-events: none;">Puedes subir varios archivos a la vez</span>
             </div>
 
             <div id="files-list" class="files-list">
@@ -634,9 +662,10 @@ function renderFiles() {
         style.id = 'file-styles';
         style.textContent = `
             .files-list { display: grid; gap: 1rem; margin-top: 2rem; }
-            .file-card { display: flex; align-items: center; justify-content: space-between; padding: 1.25rem; border: 1px solid var(--border-color); border-radius: 16px; background: var(--bg-secondary); }
-            .file-info { display: flex; align-items: center; gap: 1rem; }
-            .drop-zone { border: 2px dashed var(--border-color); border-radius: 24px; padding: 3rem; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 1rem; transition: all 0.3s ease; margin-bottom: 2rem; background: var(--bg-primary); }
+            .file-card { display: flex; align-items: center; justify-content: space-between; padding: 1.25rem; border: 1px solid var(--border-color); border-radius: 16px; background: var(--bg-secondary); min-width: 0; gap: 1rem; }
+            .file-info { display: flex; align-items: center; gap: 1rem; min-width: 0; flex: 1; }
+            .file-info span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+            .drop-zone { border: 2px dashed var(--border-color); border-radius: 24px; padding: 3rem; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 1rem; transition: all 0.3s ease; margin-bottom: 2rem; background: var(--bg-primary); cursor: pointer; }
             .drop-zone.active { border-color: var(--brand-blue); background: rgba(59, 130, 246, 0.05); transform: scale(1.01); }
         `;
         document.head.appendChild(style);
@@ -645,6 +674,11 @@ function renderFiles() {
 
 function setupDragAndDrop() {
     const dropZone = document.getElementById('drop-zone');
+    
+    // Permitir clic en el recuadro para subir archivos
+    dropZone.addEventListener('click', () => {
+        document.getElementById('file-upload').click();
+    });
     
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
         dropZone.addEventListener(eventName, e => {
@@ -996,6 +1030,15 @@ function setupEventListeners() {
     const sidebarOverlay = document.getElementById('sidebar-overlay');
     if (mobileToggle) mobileToggle.addEventListener('click', toggleMobileMenu);
     if (sidebarOverlay) sidebarOverlay.addEventListener('click', closeMobileMenu);
+
+    // Logout event
+    const btnLogout = document.getElementById('btn-logout');
+    if (btnLogout) {
+        btnLogout.addEventListener('click', () => {
+            localStorage.removeItem('isLoggedIn');
+            location.reload();
+        });
+    }
 }
 
 // Run init
