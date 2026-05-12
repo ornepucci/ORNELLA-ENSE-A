@@ -11,6 +11,7 @@ const state = {
     theme: localStorage.getItem('theme') || 'light',
     currentPage: 'dashboard',
     selectedProfessorId: null,
+    currentChatMode: 'normal', // Modo por defecto
     professors: [],
     chatHistories: {}, // Store history per professor ID
     user: null,
@@ -461,16 +462,16 @@ function renderChat() {
                 </button>
             </div>
             <div style="display: flex; justify-content: center; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap;" class="chat-mode-buttons">
-                <button class="btn btn-secondary btn-sm" id="btn-quick-response" style="font-size: 0.75rem; padding: 0.4rem 1rem;">
+                <button class="btn btn-secondary btn-sm ${state.currentChatMode === 'quick' ? 'active-mode' : ''}" id="btn-quick-mode" onclick="setChatMode('quick')">
                     <i data-lucide="zap" style="width: 14px; margin-right: 4px;"></i> Rápida
                 </button>
-                <button class="btn btn-primary btn-sm" id="btn-class-mode" style="font-size: 0.75rem; padding: 0.4rem 1rem; background: var(--brand-violet);">
+                <button class="btn btn-secondary btn-sm ${state.currentChatMode === 'class' ? 'active-mode' : ''}" id="btn-class-mode" onclick="setChatMode('class')">
                     <i data-lucide="book-open" style="width: 14px; margin-right: 4px;"></i> Clase
                 </button>
-                <button class="btn btn-secondary btn-sm" id="btn-exam-mode" style="font-size: 0.75rem; padding: 0.4rem 1rem; background: #3b82f6; color: white;">
+                <button class="btn btn-secondary btn-sm ${state.currentChatMode === 'exam' ? 'active-mode' : ''}" id="btn-exam-mode" onclick="setChatMode('exam')">
                     <i data-lucide="pencil" style="width: 14px; margin-right: 4px;"></i> Examen
                 </button>
-                <button class="btn btn-secondary btn-sm" id="btn-summary-mode" style="font-size: 0.75rem; padding: 0.4rem 1rem; background: #10b981; color: white;">
+                <button class="btn btn-secondary btn-sm ${state.currentChatMode === 'summary' ? 'active-mode' : ''}" id="btn-summary-mode" onclick="setChatMode('summary')">
                     <i data-lucide="file-text" style="width: 14px; margin-right: 4px;"></i> Resumen
                 </button>
             </div>
@@ -492,6 +493,8 @@ function renderChat() {
             .message { padding: 0.75rem 1rem; border-radius: 12px; max-width: 80%; line-height: 1.5; }
             .assistant { background: var(--bg-primary); align-self: flex-start; color: var(--text-primary); border: 1px solid var(--border-color); white-space: pre-wrap; }
             .user { background: var(--accent-gradient); color: white; align-self: flex-end; }
+            .chat-mode-buttons .btn { flex: 1; min-width: 100px; justify-content: center; background: var(--bg-primary); color: var(--text-secondary); border: 1px solid var(--border-color); }
+            .chat-mode-buttons .btn.active-mode { background: var(--accent-gradient) !important; color: white !important; border: none; box-shadow: var(--shadow-md); transform: scale(1.05); }
             .chat-input-area { display: flex; gap: 0.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color); }
             .chat-input-area input { flex: 1; padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); }
             .chat-mode-buttons .btn { flex: 1; min-width: 100px; justify-content: center; }
@@ -510,15 +513,16 @@ function renderChat() {
     }
 
     // Chat events
-    document.getElementById('send-chat').onclick = () => handleChatSubmit('normal');
-    document.getElementById('btn-quick-response').onclick = () => handleChatSubmit('quick');
-    document.getElementById('btn-class-mode').onclick = () => handleChatSubmit('class');
-    document.getElementById('btn-exam-mode').onclick = () => handleChatSubmit('exam');
-    document.getElementById('btn-summary-mode').onclick = () => handleChatSubmit('summary');
+    document.getElementById('send-chat').onclick = () => handleChatSubmit(state.currentChatMode);
     document.getElementById('chat-input').onkeypress = (e) => {
-        if (e.key === 'Enter') handleChatSubmit('normal');
+        if (e.key === 'Enter') handleChatSubmit(state.currentChatMode);
     };
 }
+
+window.setChatMode = (mode) => {
+    state.currentChatMode = mode;
+    renderChat(); // Re-render to update active class
+};
 
 window.handleProfessorClick = (id) => {
     // Si ya está seleccionado, solo toggleamos el menú
@@ -575,15 +579,15 @@ async function handleChatSubmit(mode = 'normal') {
 
         const resourceNames = resources.map(r => r.nombre_archivo).join(', ');
         
-        let systemInstruction = `Eres el asistente del Profesor ${prof.nombre}, experto en la materia ${prof.materia}. 
-        CONTEXTO Y DESCRIPCIÓN DEL PROFESOR: ${prof.descripcion || 'No hay descripción detallada'}.
+        let systemInstruction = `Eres el Profesor ${prof.nombre}, experto en la materia ${prof.materia}. 
+        CONTEXTO Y DESCRIPCIÓN: ${prof.descripcion || 'No hay descripción detallada'}.
         RECURSOS DISPONIBLES: ${resourceNames || 'Ninguno aún'}.
 
         REGLAS CRÍTICAS DE COMPORTAMIENTO:
-        1. SOLO debes responder preguntas relacionadas con la materia ${prof.materia} y el contexto descrito anteriormente.
+        1. SOLO debes responder preguntas relacionadas con la materia ${prof.materia} y tu contexto profesional.
         2. Si el usuario te pregunta sobre temas ajenos (por ejemplo: cocina, deportes, otros hobbies, o cualquier materia que no sea ${prof.materia}), DEBES declinar la respuesta cortésmente. 
-        3. Dile al alumno que tu propósito es ayudarlo específicamente con ${prof.materia} según las directivas del profesor ${prof.nombre}.
-        4. No rompas el personaje de asistente educativo especializado.`;
+        3. Recuérdale al alumno que tu propósito es ayudarlo específicamente con ${prof.materia}.
+        4. Mantén siempre el tono de un docente experto y profesional. No rompas el personaje.`;
 
         if (mode === 'quick') {
             systemInstruction += "\nREGLA ADICIONAL: Da una respuesta concisa pero completa y con contexto académico, ideal para un parcial o una pregunta de clase inmediata.";
