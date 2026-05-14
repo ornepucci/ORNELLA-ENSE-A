@@ -51,6 +51,16 @@ export default {
                 });
             }
 
+            if (!env.GEMINI_API_KEY) {
+                return new Response(JSON.stringify({ error: 'Falta configurar la variable GEMINI_API_KEY en Cloudflare' }), {
+                    status: 500,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                    }
+                });
+            }
+
             // Llamada a la API de Gemini (la key vive como Secret en Cloudflare)
             const geminiResponse = await fetch(
                 `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${env.GEMINI_API_KEY}`,
