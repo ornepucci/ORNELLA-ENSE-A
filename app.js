@@ -120,6 +120,17 @@ function initSupabase() {
     }
 }
 
+// Utilidad: escapar HTML para prevenir XSS al inyectar datos en innerHTML
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 // Theme Logic
 function applyTheme() {
     document.documentElement.setAttribute('data-theme', state.theme);
@@ -616,7 +627,10 @@ async function handleChatSubmit(mode = 'normal') {
         // Llamada segura al Cloudflare Worker (la clave de Gemini vive allá)
         const response = await fetch(`${WORKER_URL}/api/chat`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-App-Token': 'oe-ornella-2024' // Token compartido para evitar abuso de la API
+            },
             body: JSON.stringify({ prompt: systemInstruction + '\n\nPregunta del alumno: ' + text })
         });
 
@@ -680,7 +694,7 @@ function renderFiles() {
                 <label for="file-upload" class="btn btn-primary" style="cursor: pointer;">
                     <i data-lucide="plus"></i> Subir
                 </label>
-                <input type="file" id="file-upload" style="display: none;" multiple />
+                <input type="file" id="file-upload" style="display: none;" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.webp,.svg,.txt,.mp4,.mp3" />
             </div>
 
             <!-- Drag & Drop Zone -->
@@ -757,6 +771,26 @@ function setupDragAndDrop() {
 
 async function handleFileUpload(files) {
     if (!files || files.length === 0 || !state.selectedProfessorId) return;
+
+    // Validación de tipo y tamaño de archivos
+    const MAX_SIZE_MB = 20;
+    const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
+    const ALLOWED_EXTENSIONS = /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|jpg|jpeg|png|gif|webp|svg|txt|mp4|mp3)$/i;
+    const invalidFiles = [];
+
+    for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        if (!ALLOWED_EXTENSIONS.test(f.name)) {
+            invalidFiles.push(`"${f.name}" (tipo no permitido)`);
+        } else if (f.size > MAX_SIZE_BYTES) {
+            invalidFiles.push(`"${f.name}" (supera ${MAX_SIZE_MB}MB)`);
+        }
+    }
+
+    if (invalidFiles.length > 0) {
+        showModal('Archivos no válidos', `Los siguientes archivos fueron rechazados:\n${invalidFiles.join('\n')}`);
+        return;
+    }
 
     // 1. Obtener archivos existentes para este profesor
     const { data: existingFiles, error: fetchError } = await supabaseClient
@@ -850,10 +884,10 @@ async function listFiles() {
             <div class="file-card">
                 <div class="file-info">
                     <i data-lucide="file-text"></i>
-                    <span>${file.nombre_archivo}</span>
+                    <span>${escapeHtml(file.nombre_archivo)}</span>
                 </div>
                 <div style="display: flex; gap: 0.5rem;">
-                    <button class="btn btn-secondary" onclick="handleViewFile('${file.url_archivo}', '${file.nombre_archivo}')">Ver</button>
+                    <button class="btn btn-secondary" onclick="handleViewFile('${file.url_archivo}', '${escapeHtml(file.nombre_archivo)}')">Ver</button>
                     <button class="btn" style="color: #ef4444; background: none; border: none; cursor: pointer;" onclick="handleDeleteFile('${file.id}')">
                         <i data-lucide="trash-2"></i>
                     </button>
