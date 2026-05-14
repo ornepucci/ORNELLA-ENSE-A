@@ -31,21 +31,23 @@ let chatSession = null;
 
 // Initialize App
 async function init() {
-    // Usamos sessionStorage para que la sesión expire al cerrar la pestaña o app
-    if (sessionStorage.getItem('isLoggedIn') !== 'true') {
-        const loginScreen = document.getElementById('login-screen');
-        const appScreen = document.getElementById('app');
-        if (loginScreen) loginScreen.style.display = 'flex';
-        if (appScreen) appScreen.style.display = 'none';
-        return; // Don't initialize app until logged in
-    }
-    
+    // Verificar sesión real con Supabase Auth (JWT)
+    const { data: { session } } = await supabaseClient.auth.getSession();
+
     const loginScreen = document.getElementById('login-screen');
     const appScreen = document.getElementById('app');
+
+    if (!session) {
+        // No hay sesión válida → mostrar pantalla de login
+        if (loginScreen) loginScreen.style.display = 'flex';
+        if (appScreen) appScreen.style.display = 'none';
+        return;
+    }
+
+    // Sesión válida → mostrar la app
     if (loginScreen) loginScreen.style.display = 'none';
     if (appScreen) appScreen.style.display = 'flex';
 
-    initSupabase();
     initGemini();
     applyTheme();
     setupEventListeners();
@@ -53,22 +55,34 @@ async function init() {
     renderDashboard();
 }
 
-window.handleLogin = function() {
-    const emailInput = document.getElementById('login-email').value;
+window.handleLogin = async function() {
+    const emailInput = document.getElementById('login-email').value.trim();
     const passwordInput = document.getElementById('login-password').value;
     const errorMsg = document.getElementById('login-error');
-    
-    // Validar correo y contraseña
-    if (emailInput.toLowerCase().trim() === 'ornepucci2402@gmail.com' && passwordInput === 'Y@g00902') {
-        sessionStorage.setItem('isLoggedIn', 'true');
-        if (errorMsg) errorMsg.style.display = 'none';
-        
-        // Limpiar campos por seguridad
-        document.getElementById('login-password').value = '';
-        init(); // Start the app
-    } else {
+    const submitBtn = document.querySelector('#login-form button[type="submit"]');
+
+    // Mostrar estado de carga
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Verificando...'; }
+    if (errorMsg) errorMsg.style.display = 'none';
+
+    // Autenticación real con Supabase Auth
+    const { error } = await supabaseClient.auth.signInWithPassword({
+        email: emailInput,
+        password: passwordInput
+    });
+
+    // Restaurar botón
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Ingresar a la plataforma'; }
+
+    if (error) {
         if (errorMsg) errorMsg.style.display = 'block';
+        return;
     }
+
+    // Login exitoso
+    if (errorMsg) errorMsg.style.display = 'none';
+    document.getElementById('login-password').value = '';
+    await init();
 }
 
 function setupDashboardEvents() {
@@ -1063,11 +1077,11 @@ function setupEventListeners() {
     if (mobileToggle) mobileToggle.addEventListener('click', toggleMobileMenu);
     if (sidebarOverlay) sidebarOverlay.addEventListener('click', closeMobileMenu);
 
-    // Logout event
+    // Logout event (Supabase Auth)
     const btnLogout = document.getElementById('btn-logout');
     if (btnLogout) {
-        btnLogout.addEventListener('click', () => {
-            sessionStorage.removeItem('isLoggedIn');
+        btnLogout.addEventListener('click', async () => {
+            await supabaseClient.auth.signOut();
             location.reload();
         });
     }
@@ -1082,8 +1096,11 @@ window.onpopstate = (event) => {
     }
 };
 
-// Run init
-window.addEventListener('DOMContentLoaded', init);
+// Run init — inicializar Supabase primero, luego verificar sesión
+window.addEventListener('DOMContentLoaded', async () => {
+    initSupabase(); // Debe ejecutarse antes de verificar auth
+    await init();
+});
 
 // Expose functions to global scope for inline onclick handlers
 window.navigate = navigate;
