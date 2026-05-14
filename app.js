@@ -48,7 +48,6 @@ async function init() {
     if (loginScreen) loginScreen.style.display = 'none';
     if (appScreen) appScreen.style.display = 'flex';
 
-    initGemini();
     applyTheme();
     setupEventListeners();
     await fetchProfessors();
@@ -93,22 +92,7 @@ function setupDashboardEvents() {
     if (btnBuscar) btnBuscar.onclick = () => navigate('files');
 }
 
-async function initGemini() {
-    try {
-        // Force version v1 for stability
-        genAI = new GoogleGenerativeAI(state.geminiKey);
-        model = genAI.getGenerativeModel({ 
-            model: "gemini-2.5-flash",
-            apiVersion: "v1" 
-        });
-        chatSession = model.startChat({
-            history: [],
-        });
-        console.log("Gemini inicializado con gemini-2.5-flash (v1)");
-    } catch (error) {
-        console.error("Error al inicializar Gemini:", error);
-    }
-}
+
 
 function initSupabase() {
     try {
