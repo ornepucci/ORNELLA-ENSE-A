@@ -61,6 +61,31 @@ export default {
                     return new Response(JSON.stringify({ error: 'Falta configurar GEMINI_API_KEY en Cloudflare' }), { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } });
                 }
 
+                // Func helper para mime types
+                function getMimeType(filename) {
+                    if (!filename) return "application/pdf";
+                    const ext = filename.split('.').pop().toLowerCase();
+                    const types = {
+                        'pdf': 'application/pdf',
+                        'png': 'image/png',
+                        'jpg': 'image/jpeg',
+                        'jpeg': 'image/jpeg',
+                        'webp': 'image/webp',
+                        'txt': 'text/plain',
+                        'csv': 'text/csv',
+                        'md': 'text/markdown',
+                        'mp3': 'audio/mp3',
+                        'mp4': 'video/mp4',
+                        'doc': 'application/msword',
+                        'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                        'xls': 'application/vnd.ms-excel',
+                        'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        'ppt': 'application/vnd.ms-powerpoint',
+                        'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+                    };
+                    return types[ext] || 'application/octet-stream';
+                }
+
                 let parts = [];
                 
                 // Agregar archivos usando la File API nativa de Google (gemini_file_uri)
@@ -69,8 +94,7 @@ export default {
                         parts.push({
                             fileData: {
                                 fileUri: file.gemini_file_uri,
-                                // Gemini inferirá el mimeType o usará el default
-                                mimeType: file.mime_type || "application/pdf"
+                                mimeType: getMimeType(file.nombre_archivo)
                             }
                         });
                     }
