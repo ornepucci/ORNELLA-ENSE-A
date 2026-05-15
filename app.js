@@ -608,6 +608,12 @@ async function handleChatSubmit(mode = 'normal') {
             systemInstruction += "\nREGLA ADICIONAL: Proporciona un resumen claro, estructurado y sintético de la información solicitada o de los materiales disponibles.";
         }
 
+        // 1. Obtener archivos del profesor para enviarlos como contexto a Gemini
+        const { data: files } = await supabaseClient
+            .from('recursos_profesor')
+            .select('url_archivo, nombre_archivo')
+            .eq('profesor_id', prof.id);
+
         // Llamada segura al Cloudflare Worker (la clave de Gemini vive allá)
         const response = await fetch(`${WORKER_URL}/api/chat`, {
             method: 'POST',
@@ -615,7 +621,10 @@ async function handleChatSubmit(mode = 'normal') {
                 'Content-Type': 'application/json',
                 'X-App-Token': 'oe-ornella-2024' // Token compartido para evitar abuso de la API
             },
-            body: JSON.stringify({ prompt: systemInstruction + '\n\nPregunta del alumno: ' + text })
+            body: JSON.stringify({ 
+                prompt: systemInstruction + '\n\nPregunta del alumno: ' + text,
+                files: files || []
+            })
         });
 
         const data = await response.json();

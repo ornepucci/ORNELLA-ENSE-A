@@ -4,6 +4,8 @@
  * La GEMINI_API_KEY vive como Secret en Cloudflare, nunca en el código.
  */
 
+import { Buffer } from 'node:buffer';
+
 export default {
     async fetch(request, env) {
 
@@ -39,7 +41,7 @@ export default {
 
         // --- Procesar la solicitud de chat ---
         try {
-            const { prompt } = await request.json();
+            const { prompt, files = [] } = await request.json();
 
             if (!prompt) {
                 return new Response(JSON.stringify({ error: 'Prompt requerido' }), {
@@ -61,6 +63,53 @@ export default {
                 });
             }
 
+            let parts = [{ text: prompt }];
+
+            // Func helper para mime types soportados por Gemini inlineData
+            function getMimeType(filename) {
+                const ext = filename.split('.').pop().toLowerCase();
+                const types = {
+                    'pdf': 'application/pdf',
+                    'png': 'image/png',
+                    'jpg': 'image/jpeg',
+                    'jpeg': 'image/jpeg',
+                    'webp': 'image/webp',
+                    'txt': 'text/plain',
+                    'mp3': 'audio/mp3'
+                };
+                return types[ext] || null;
+            }
+
+            // Procesar hasta 5 archivos como máximo para no exceder memoria del Worker
+            const filesToProcess = files.slice(0, 5);
+
+            for (const file of filesToProcess) {
+                const mimeType = getMimeType(file.nombre_archivo);
+                if (!mimeType) continue; // Si no es compatible (ej. docx), lo ignoramos
+
+                try {
+                    const fileRes = await fetch(file.url_archivo);
+                    if (!fileRes.ok) continue;
+
+                    if (mimeType === 'text/plain') {
+                        const textContent = await fileRes.text();
+                        parts.push({ text: `\n--- Archivo Adjunto: ${file.nombre_archivo} ---\n${textContent}\n--- Fin de archivo ---` });
+                    } else {
+                        const arrayBuffer = await fileRes.arrayBuffer();
+                        const base64Data = Buffer.from(arrayBuffer).toString('base64');
+
+                        parts.push({
+                            inlineData: {
+                                mimeType: mimeType,
+                                data: base64Data
+                            }
+                        });
+                    }
+                } catch (e) {
+                    console.error('Error fetching file context:', e);
+                }
+            }
+
             // Llamada a la API de Gemini (la key vive como Secret en Cloudflare)
             const geminiResponse = await fetch(
                 `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
@@ -68,7 +117,7 @@ export default {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        contents: [{ parts: [{ text: prompt }] }],
+                        contents: [{ parts: parts }],
                         generationConfig: {
                             temperature: 0.7,
                             maxOutputTokens: 2048,
