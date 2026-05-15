@@ -88,12 +88,12 @@ export default {
                         'md': 'text/markdown',
                         'mp3': 'audio/mp3',
                         'mp4': 'video/mp4',
-                        'doc': 'application/msword',
-                        'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                        'xls': 'application/vnd.ms-excel',
-                        'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                        'ppt': 'application/vnd.ms-powerpoint',
-                        'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+                        'doc': 'text/plain', // Extraemos texto
+                        'docx': 'text/plain', // Extraemos texto en el frontend
+                        'xls': 'text/csv',
+                        'xlsx': 'text/csv',
+                        'ppt': 'text/plain',
+                        'pptx': 'text/plain'
                     };
                     return types[ext] || 'application/octet-stream';
                 }
