@@ -1,15 +1,7 @@
-/**
- * Ornella Enseña - Cloudflare Worker
- * Maneja las llamadas a la API de Gemini de forma segura.
- * La GEMINI_API_KEY vive como Secret en Cloudflare, nunca en el código.
- */
-
-import { Buffer } from 'node:buffer';
-
 export default {
     async fetch(request, env) {
 
-        // --- CORS: manejar preflight OPTIONS ---
+        // --- CORS ---
         if (request.method === 'OPTIONS') {
             return new Response(null, {
                 headers: {
@@ -22,134 +14,102 @@ export default {
 
         const url = new URL(request.url);
 
-        // Solo procesar /api/chat
-        if (url.pathname !== '/api/chat') {
-            return new Response('Not Found', { status: 404 });
-        }
-
         // --- 🔒 Validar token de acceso ---
         const token = request.headers.get('X-App-Token');
         if (token !== 'oe-ornella-2024') {
-            return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-                status: 401,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
-                }
-            });
+            return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Access-Control-Allow-Origin': '*' } });
         }
 
-        // --- Procesar la solicitud de chat ---
-        try {
-            const { prompt, files = [] } = await request.json();
+        // --- ENDPOINT: Upload File to Gemini ---
+        if (url.pathname === '/api/upload-file' && request.method === 'POST') {
+            try {
+                const { fileUrl, mimeType } = await request.json();
+                if (!fileUrl) throw new Error("fileUrl requerido");
 
-            if (!prompt) {
-                return new Response(JSON.stringify({ error: 'Prompt requerido' }), {
-                    status: 400,
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Access-Control-Allow-Origin': '*'
-                    }
+                // 1. Descargar archivo desde Supabase
+                const fileRes = await fetch(fileUrl);
+                if (!fileRes.ok) throw new Error("No se pudo descargar el archivo de Supabase");
+                const arrayBuffer = await fileRes.arrayBuffer();
+
+                // 2. Subir a Gemini File API
+                const uploadRes = await fetch(`https://generativelanguage.googleapis.com/upload/v1beta/files?uploadType=media&key=${env.GEMINI_API_KEY}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': mimeType || fileRes.headers.get('content-type') || 'application/octet-stream' },
+                    body: arrayBuffer
                 });
-            }
 
-            if (!env.GEMINI_API_KEY) {
-                return new Response(JSON.stringify({ error: 'Falta configurar la variable GEMINI_API_KEY en Cloudflare' }), {
-                    status: 500,
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Access-Control-Allow-Origin': '*'
-                    }
+                const uploadData = await uploadRes.json();
+                if (!uploadRes.ok) throw new Error(uploadData.error?.message || "Error al subir a Gemini");
+
+                return new Response(JSON.stringify({ gemini_file_uri: uploadData.file.uri }), {
+                    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
                 });
+
+            } catch (error) {
+                console.error("Upload error:", error);
+                return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } });
             }
+        }
 
-            let parts = [{ text: prompt }];
+        // --- ENDPOINT: Chat ---
+        if (url.pathname === '/api/chat' && request.method === 'POST') {
+            try {
+                const { prompt, files = [] } = await request.json();
+                if (!prompt) throw new Error("Prompt requerido");
 
-            // Func helper para mime types soportados por Gemini inlineData
-            function getMimeType(filename) {
-                const ext = filename.split('.').pop().toLowerCase();
-                const types = {
-                    'pdf': 'application/pdf',
-                    'png': 'image/png',
-                    'jpg': 'image/jpeg',
-                    'jpeg': 'image/jpeg',
-                    'webp': 'image/webp',
-                    'txt': 'text/plain',
-                    'mp3': 'audio/mp3'
-                };
-                return types[ext] || null;
-            }
+                if (!env.GEMINI_API_KEY) {
+                    return new Response(JSON.stringify({ error: 'Falta configurar GEMINI_API_KEY en Cloudflare' }), { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } });
+                }
 
-            // Procesar hasta 5 archivos como máximo para no exceder memoria del Worker
-            const filesToProcess = files.slice(0, 5);
-
-            for (const file of filesToProcess) {
-                const mimeType = getMimeType(file.nombre_archivo);
-                if (!mimeType) continue; // Si no es compatible (ej. docx), lo ignoramos
-
-                try {
-                    const fileRes = await fetch(file.url_archivo);
-                    if (!fileRes.ok) continue;
-
-                    if (mimeType === 'text/plain') {
-                        const textContent = await fileRes.text();
-                        parts.push({ text: `\n--- Archivo Adjunto: ${file.nombre_archivo} ---\n${textContent}\n--- Fin de archivo ---` });
-                    } else {
-                        const arrayBuffer = await fileRes.arrayBuffer();
-                        const base64Data = Buffer.from(arrayBuffer).toString('base64');
-
+                let parts = [];
+                
+                // Agregar archivos usando la File API nativa de Google (gemini_file_uri)
+                for (const file of files) {
+                    if (file.gemini_file_uri) {
                         parts.push({
-                            inlineData: {
-                                mimeType: mimeType,
-                                data: base64Data
+                            fileData: {
+                                fileUri: file.gemini_file_uri,
+                                // Gemini inferirá el mimeType o usará el default
+                                mimeType: file.mime_type || "application/pdf"
                             }
                         });
                     }
-                } catch (e) {
-                    console.error('Error fetching file context:', e);
                 }
+                
+                // Agregar el texto de la pregunta al final
+                parts.push({ text: prompt });
+
+                // Llamada a la API de Gemini
+                const geminiResponse = await fetch(
+                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: parts }],
+                            generationConfig: { temperature: 0.7, maxOutputTokens: 2048 }
+                        })
+                    }
+                );
+
+                if (!geminiResponse.ok) {
+                    const errData = await geminiResponse.json();
+                    throw new Error(errData.error?.message || `API error ${geminiResponse.status}`);
+                }
+
+                const data = await geminiResponse.json();
+                const text = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sin respuesta disponible.';
+
+                return new Response(JSON.stringify({ text }), {
+                    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+                });
+
+            } catch (error) {
+                console.error('Worker error:', error.message);
+                return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } });
             }
-
-            // Llamada a la API de Gemini (la key vive como Secret en Cloudflare)
-            const geminiResponse = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{ parts: parts }],
-                        generationConfig: {
-                            temperature: 0.7,
-                            maxOutputTokens: 2048,
-                        }
-                    })
-                }
-            );
-
-            if (!geminiResponse.ok) {
-                const errData = await geminiResponse.json();
-                throw new Error(errData.error?.message || `API error ${geminiResponse.status}`);
-            }
-
-            const data = await geminiResponse.json();
-            const text = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sin respuesta disponible.';
-
-            return new Response(JSON.stringify({ text }), {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
-                }
-            });
-
-        } catch (error) {
-            console.error('Worker error:', error.message);
-            return new Response(JSON.stringify({ error: error.message }), {
-                status: 500,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
-                }
-            });
         }
+
+        return new Response('Not Found', { status: 404 });
     }
 };

@@ -611,7 +611,7 @@ async function handleChatSubmit(mode = 'normal') {
         // 1. Obtener archivos del profesor para enviarlos como contexto a Gemini
         const { data: files } = await supabaseClient
             .from('recursos_profesor')
-            .select('url_archivo, nombre_archivo')
+            .select('url_archivo, nombre_archivo, gemini_file_uri')
             .eq('profesor_id', prof.id);
 
         // Llamada segura al Cloudflare Worker (la clave de Gemini vive allá)
@@ -830,12 +830,34 @@ async function handleFileUpload(files) {
 
             const publicUrl = supabaseClient.storage.from('recursos').getPublicUrl(fileName).data.publicUrl;
 
+            // Procesamiento en background: subir a Gemini File API
+            let geminiUri = null;
+            try {
+                // Notificar en UI que estamos procesando para IA
+                const modalText = document.querySelector('.modal p');
+                if (modalText) modalText.innerText = `Procesando ${file.name} para la IA...`;
+
+                const workerRes = await fetch(`${WORKER_URL}/api/upload-file`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-App-Token': 'oe-ornella-2024' },
+                    body: JSON.stringify({ fileUrl: publicUrl, mimeType: file.type || 'application/octet-stream' })
+                });
+                
+                if (workerRes.ok) {
+                    const workerData = await workerRes.json();
+                    geminiUri = workerData.gemini_file_uri;
+                }
+            } catch (e) {
+                console.warn("No se pudo subir a Gemini (funcionará solo como descarga):", e);
+            }
+
             const { error: dbError } = await supabaseClient
                 .from('recursos_profesor')
                 .insert([{
                     profesor_id: state.selectedProfessorId,
                     nombre_archivo: file.name,
-                    url_archivo: publicUrl
+                    url_archivo: publicUrl,
+                    gemini_file_uri: geminiUri
                 }]);
 
             if (dbError) throw dbError;
