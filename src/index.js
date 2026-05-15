@@ -23,18 +23,30 @@ export default {
         // --- ENDPOINT: Upload File to Gemini ---
         if (url.pathname === '/api/upload-file' && request.method === 'POST') {
             try {
-                const { fileUrl, mimeType } = await request.json();
-                if (!fileUrl) throw new Error("fileUrl requerido");
+                const { fileUrl, mimeType, textContent } = await request.json();
 
-                // 1. Descargar archivo desde Supabase
-                const fileRes = await fetch(fileUrl);
-                if (!fileRes.ok) throw new Error("No se pudo descargar el archivo de Supabase");
-                const arrayBuffer = await fileRes.arrayBuffer();
+                let arrayBuffer;
+                let finalMimeType = mimeType || 'application/octet-stream';
+
+                // Si viene texto puro (ej. extraído de un docx en el frontend), lo convertimos a binario
+                if (textContent) {
+                    arrayBuffer = new TextEncoder().encode(textContent).buffer;
+                    finalMimeType = 'text/plain';
+                } 
+                // Si viene url, lo descargamos de Supabase
+                else if (fileUrl) {
+                    const fileRes = await fetch(fileUrl);
+                    if (!fileRes.ok) throw new Error("No se pudo descargar el archivo de Supabase");
+                    arrayBuffer = await fileRes.arrayBuffer();
+                    if (!mimeType) finalMimeType = fileRes.headers.get('content-type') || 'application/octet-stream';
+                } else {
+                    throw new Error("Se requiere fileUrl o textContent");
+                }
 
                 // 2. Subir a Gemini File API
                 const uploadRes = await fetch(`https://generativelanguage.googleapis.com/upload/v1beta/files?uploadType=media&key=${env.GEMINI_API_KEY}`, {
                     method: 'POST',
-                    headers: { 'Content-Type': mimeType || fileRes.headers.get('content-type') || 'application/octet-stream' },
+                    headers: { 'Content-Type': finalMimeType },
                     body: arrayBuffer
                 });
 

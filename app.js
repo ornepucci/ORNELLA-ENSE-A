@@ -837,10 +837,20 @@ async function handleFileUpload(files) {
                 const modalText = document.querySelector('.modal p');
                 if (modalText) modalText.innerText = `Procesando ${file.name} para la IA...`;
 
+                let workerPayload = { fileUrl: publicUrl, mimeType: file.type || 'application/octet-stream' };
+
+                // Extraer texto si es DOCX para enviarlo limpio a Gemini
+                if (file.name.toLowerCase().endsWith('.docx') && window.mammoth) {
+                    if (modalText) modalText.innerText = `Extrayendo texto de ${file.name}...`;
+                    const arrayBuffer = await file.arrayBuffer();
+                    const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+                    workerPayload = { textContent: result.value, mimeType: 'text/plain' };
+                }
+
                 const workerRes = await fetch(`${WORKER_URL}/api/upload-file`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-App-Token': 'oe-ornella-2024' },
-                    body: JSON.stringify({ fileUrl: publicUrl, mimeType: file.type || 'application/octet-stream' })
+                    body: JSON.stringify(workerPayload)
                 });
                 
                 if (workerRes.ok) {
